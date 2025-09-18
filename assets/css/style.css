@@ -1,0 +1,23 @@
+/* Custom styles for the procurement system */
+body {
+    font-family: 'Prompt', sans-serif;
+}
+nav.navbar {
+    margin-bottom: 1rem;
+}
+/* Sidebar styling for dashboards */
+.sidebar {
+    height: 100vh;
+    padding-top: 1rem;
+    background-color: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+}
+.sidebar a {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: #333;
+    text-decoration: none;
+}
+.sidebar a:hover {
+    background-color: #e9ecef;
+}
