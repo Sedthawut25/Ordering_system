@@ -1,78 +1,172 @@
 <?php
-require_once __DIR__ . '/../includes/header.php';
-check_role(['Purchasing']);
+// procurement_system/purchasing/open_requests.php
+
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
 require_once __DIR__ . '/../db.php';
 
-// If action to open for bid
-if (isset($_GET['open'])) {
-    $reqId = (int)$_GET['open'];
-    $stmt = $pdo->prepare('UPDATE purchase_requests SET status = "OpenForBid" WHERE id = ?');
-    $stmt->execute([$reqId]);
-    header('Location: open_requests.php');
-    exit;
+// ✅ ตรวจ role ก่อน output
+if (empty($_SESSION['role']) || $_SESSION['role'] !== 'Purchasing') {
+  header('Location: /procurement_system/login.php');
+  exit;
 }
 
-// Fetch requests approved by dept head but not yet open for bid
-$stmt = $pdo->prepare('SELECT pr.*, e.name AS employee_name FROM purchase_requests pr JOIN employees e ON pr.employee_id = e.id WHERE pr.status = "ApprovedByDeptHead" ORDER BY pr.id DESC');
-$stmt->execute();
+// ✅ เปิดประกาศ
+if (isset($_GET['open'])) {
+  $reqId = (int)$_GET['open'];
+  $stmt = $pdo->prepare('UPDATE purchase_requests SET status = "OpenForBid" WHERE id = ?');
+  $stmt->execute([$reqId]);
+  header('Location: /procurement_system/purchasing/open_requests.php');
+  exit;
+}
+
+// ✅ โหลดใบขอซื้อที่อนุมัติแล้ว แต่ยังไม่เปิดประกาศ
+$sql = 'SELECT pr.*, e.name AS employee_name
+        FROM purchase_requests pr
+        JOIN employees e ON e.id = pr.employee_id
+        WHERE pr.status = "ApprovedByDeptHead"
+        ORDER BY pr.id DESC';
+$stmt = $pdo->query($sql);
 $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// ✅ include header ตอนนี้ค่อยเรียก (มี Topbar ด้วย)
+require_once __DIR__ . '/../includes/header.php';
 ?>
-<!-- Sidebar -->
-<nav class="col-md-2 d-none d-md-block sidebar">
-    <div class="position-sticky">
-        <ul class="nav flex-column">
-            <li class="nav-item"><a class="nav-link" href="/procurement_system/purchasing/index.php">แดชบอร์ด</a></li>
-            <li class="nav-item"><a class="nav-link" href="/procurement_system/purchasing/products.php">จัดการสินค้า</a></li>
-            <li class="nav-item"><a class="nav-link active" href="/procurement_system/purchasing/open_requests.php">ใบขอซื้อเปิดประกาศ</a></li>
-            <li class="nav-item"><a class="nav-link" href="/procurement_system/purchasing/compare_quotes.php">เปรียบเทียบใบเสนอราคา</a></li>
-            <li class="nav-item"><a class="nav-link" href="/procurement_system/purchasing/purchase_orders.php">ใบสั่งซื้อ</a></li>
-            <li class="nav-item"><a class="nav-link" href="/procurement_system/purchasing/tax_reports.php">รายงานภาษีซื้อ</a></li>
-        </ul>
+
+<div class="container-fluid">
+  <div class="row g-0">
+
+    <!-- Sidebar desktop -->
+    <aside class="col-lg-2 d-none d-lg-block sidebar">
+      <div class="sidebar-title">เมนูจัดซื้อ</div>
+      <nav class="nav flex-column">
+        <a class="nav-link <?= nav_active('/purchasing/index.php') ?>" href="/procurement_system/purchasing/index.php">
+          <i class="bi bi-speedometer2 me-2"></i> แดชบอร์ด
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/products') ?>" href="/procurement_system/purchasing/products.php">
+          <i class="bi bi-box-seam me-2"></i> จัดการสินค้า
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/open_requests') ?>" href="/procurement_system/purchasing/open_requests.php">
+          <i class="bi bi-megaphone me-2"></i> ใบขอซื้อเปิดประกาศ
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/compare_quotes') ?>" href="/procurement_system/purchasing/compare_quotes.php">
+          <i class="bi bi-diagram-3 me-2"></i> เปรียบเทียบใบเสนอราคา
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/purchase_orders') ?>" href="/procurement_system/purchasing/purchase_orders.php">
+          <i class="bi bi-receipt me-2"></i> ใบสั่งซื้อ
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/tax_reports') ?>" href="/procurement_system/purchasing/tax_reports.php">
+          <i class="bi bi-file-earmark-text me-2"></i> รายงานภาษีซื้อ
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Offcanvas (mobile) -->
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSidebar" aria-labelledby="offcanvasSidebarLabel">
+      <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="offcanvasSidebarLabel">
+          <i class="bi bi-bag-check-fill me-1"></i> เมนูจัดซื้อ
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body offcanvas-nav">
+        <a class="nav-link <?= nav_active('/purchasing/index.php') ?>" href="/procurement_system/purchasing/index.php" data-bs-dismiss="offcanvas">
+          <i class="bi bi-speedometer2 me-2"></i> แดชบอร์ด
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/products') ?>" href="/procurement_system/purchasing/products.php" data-bs-dismiss="offcanvas">
+          <i class="bi bi-box-seam me-2"></i> จัดการสินค้า
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/open_requests') ?>" href="/procurement_system/purchasing/open_requests.php" data-bs-dismiss="offcanvas">
+          <i class="bi bi-megaphone me-2"></i> ใบขอซื้อเปิดประกาศ
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/compare_quotes') ?>" href="/procurement_system/purchasing/compare_quotes.php" data-bs-dismiss="offcanvas">
+          <i class="bi bi-diagram-3 me-2"></i> เปรียบเทียบใบเสนอราคา
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/purchase_orders') ?>" href="/procurement_system/purchasing/purchase_orders.php" data-bs-dismiss="offcanvas">
+          <i class="bi bi-receipt me-2"></i> ใบสั่งซื้อ
+        </a>
+        <a class="nav-link <?= nav_active('/purchasing/tax_reports') ?>" href="/procurement_system/purchasing/tax_reports.php" data-bs-dismiss="offcanvas">
+          <i class="bi bi-file-earmark-text me-2"></i> รายงานภาษีซื้อ
+        </a>
+      </div>
     </div>
-</nav>
-<main class="col-md-10 ms-sm-auto px-md-4">
-    <h2 class="mb-3">ใบขอซื้อที่รอเปิดประกาศ</h2>
-    <div class="accordion" id="requestsList">
+
+
+    <!-- Main -->
+    <main class="col-lg-10 app-content">
+      <h2 class="mb-3">ใบขอซื้อที่รอเปิดประกาศ</h2>
+
+      <div class="accordion" id="requestsList">
         <?php foreach ($requests as $req): ?>
-            <div class="accordion-item mb-2">
-                <h2 class="accordion-header" id="heading<?= $req['id'] ?>">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse<?= $req['id'] ?>" aria-expanded="false" aria-controls="collapse<?= $req['id'] ?>">
-                        ใบขอซื้อ #<?= $req['id'] ?> | พนักงาน: <?= htmlspecialchars($req['employee_name']) ?> | วันที่ <?= htmlspecialchars($req['request_date']) ?>
-                    </button>
-                </h2>
-                <div id="collapse<?= $req['id'] ?>" class="accordion-collapse collapse" aria-labelledby="heading<?= $req['id'] ?>" data-bs-parent="#requestsList">
-                    <div class="accordion-body">
-                        <p><strong>เหตุผล:</strong> <?= htmlspecialchars($req['reason']) ?></p>
-                        <?php
-                        // Items
-                        $itemsStmt = $pdo->prepare('SELECT pri.quantity, p.name FROM purchase_request_items pri JOIN products p ON pri.product_id = p.id WHERE pri.purchase_request_id = ?');
-                        $itemsStmt->execute([$req['id']]);
-                        $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
-                        ?>
-                        <table class="table table-sm table-bordered mb-3">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>สินค้า</th>
-                                    <th>จำนวน</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($items as $it): ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($it['name']) ?></td>
-                                        <td><?= $it['quantity'] ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                        <a href="?open=<?= $req['id'] ?>" class="btn btn-primary" onclick="return confirm('ยืนยันการเปิดประกาศใบขอซื้อนี้?')">เปิดประกาศให้ผู้ขายเสนอราคา</a>
-                    </div>
+          <div class="accordion-item mb-2">
+            <h2 class="accordion-header" id="heading<?= (int)$req['id'] ?>">
+              <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapse<?= (int)$req['id'] ?>">
+                ใบขอซื้อ #<?= (int)$req['id'] ?> |
+                พนักงาน: <?= htmlspecialchars($req['employee_name'], ENT_QUOTES, 'UTF-8') ?> |
+                วันที่ <?= htmlspecialchars($req['request_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+              </button>
+            </h2>
+
+            <div id="collapse<?= (int)$req['id'] ?>" class="accordion-collapse collapse"
+              data-bs-parent="#requestsList">
+              <div class="accordion-body">
+                <p><strong>เหตุผล:</strong> <?= htmlspecialchars($req['reason'] ?? '', ENT_QUOTES, 'UTF-8') ?></p>
+
+                <?php
+                $itemsStmt = $pdo->prepare('
+                  SELECT pri.quantity, p.name
+                  FROM purchase_request_items pri
+                  JOIN products p ON p.id = pri.product_id
+                  WHERE pri.purchase_request_id = ?
+                  ORDER BY p.name
+                ');
+                $itemsStmt->execute([(int)$req['id']]);
+                $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
+                ?>
+
+                <div class="table-responsive mb-3">
+                  <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                      <tr>
+                        <th>สินค้า</th>
+                        <th class="text-end" style="width:120px">จำนวน</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <?php foreach ($items as $it): ?>
+                        <tr>
+                          <td><?= htmlspecialchars($it['name'], ENT_QUOTES, 'UTF-8') ?></td>
+                          <td class="text-end"><?= number_format((float)$it['quantity'], 2) ?></td>
+                        </tr>
+                      <?php endforeach; ?>
+                      <?php if (empty($items)): ?>
+                        <tr>
+                          <td colspan="2" class="text-center text-muted">ไม่มีรายการสินค้า</td>
+                        </tr>
+                      <?php endif; ?>
+                    </tbody>
+                  </table>
                 </div>
+
+                <a href="?open=<?= (int)$req['id'] ?>" class="btn btn-primary"
+                  onclick="return confirm('ยืนยันการเปิดประกาศใบขอซื้อนี้?')">
+                  เปิดประกาศให้ผู้ขายเสนอราคา
+                </a>
+              </div>
             </div>
+          </div>
         <?php endforeach; ?>
+
         <?php if (empty($requests)): ?>
-            <p>ไม่มีใบขอซื้อที่รอการเปิดประกาศ</p>
+          <p class="text-muted">ไม่มีใบขอซื้อที่รอการเปิดประกาศ</p>
         <?php endif; ?>
-    </div>
-</main>
+      </div>
+    </main>
+
+  </div>
+</div>
+
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

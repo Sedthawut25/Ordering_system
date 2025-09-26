@@ -1,23 +1,398 @@
 /* Custom styles for the procurement system */
 body {
-    font-family: 'Prompt', sans-serif;
+  font-family: 'Prompt', sans-serif;
 }
+
+h4 {
+  font-weight: 600;
+}
+
+.brand-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.brand-sub {
+  font-size: .9rem;
+  color: #6c757d;
+}
+
 nav.navbar {
-    margin-bottom: 1rem;
+  margin-bottom: 1rem;
 }
+
 /* Sidebar styling for dashboards */
 .sidebar {
-    height: 100vh;
-    padding-top: 1rem;
-    background-color: #f8f9fa;
-    border-right: 1px solid #dee2e6;
+  height: 100vh;
+  padding-top: 1rem;
+  background-color: #f8f9fa;
+  border-right: 1px solid #d4dce4;
 }
+
 .sidebar a {
-    display: block;
-    padding: 0.5rem 1rem;
-    color: #333;
-    text-decoration: none;
+  display: block;
+  padding: 0.5rem 1rem;
+  color: #333;
+  text-decoration: none;
 }
+
 .sidebar a:hover {
-    background-color: #e9ecef;
+  background-color: #e9ecef;
+}
+
+/* ===== Auth Minimal Background (robust) ===== */
+body.auth-bg {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at -8% -15%, #e6f0ff 0, rgba(230, 240, 255, 0) 60%),
+    radial-gradient(1000px 520px at 110% 120%, #ffe9ef 0, rgba(255, 233, 239, 0) 60%),
+    #f8fafc;
+}
+
+/* ลายจุดบาง ๆ ด้วย repeating-radial-gradient (ไม่พึ่งรูป) */
+body.auth-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(rgba(17, 24, 39, .05) 1px, transparent 1.5px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(70% 60% at 50% 40%, #000 60%, transparent 100%);
+}
+
+/* ไอคอนร้านค้าแบบ data-URI (เข้ารหัสแล้ว) */
+body.auth-bg::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: .30;
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-size: 110px 110px, 90px 90px, 100px 100px;
+
+  background-position: 6% 18%, 94% 26%, 50% 88%;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d4ed8' stroke-width='1.5'%3E%3Cpath d='M6 7h12l-1 12H7L6 7Z'/%3E%3Cpath d='M9 7a3 3 0 0 1 6 0'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d4ed8' stroke-width='1.5'%3E%3Cpath d='M20 12L12 20l-8-8 8-8 8 8Z'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d4ed8' stroke-width='1.5'%3E%3Cpath d='M3 6h2l2.5 9h10.5l2-6H7.5'/%3E%3Ccircle cx='10' cy='19' r='1.5'/%3E%3Ccircle cx='17' cy='19' r='1.5'/%3E%3C/svg%3E");
+}
+
+/* การ์ด/อินพุตให้นุ่มขึ้น */
+.auth-card {
+  border-radius: 16px;
+  box-shadow:
+    0 10px 25px rgba(15, 23, 42, .06),
+    0 2px 6px rgba(15, 23, 42, .04);
+  border: 1px solid rgba(15, 23, 42, .06);
+}
+
+.form-control {
+  border-radius: 10px;
+}
+
+.btn-primary {
+  border-radius: 10px;
+}
+
+/* Title/Sub (ถ้ายังไม่มี) */
+.brand-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.brand-sub {
+  font-size: .9rem;
+  color: #6c757d;
+}
+
+/* Mobile: ย่อขนาดไอคอนพื้นหลัง */
+@media (max-width: 576px) {
+  body.auth-bg::after {
+    background-size: 72px 72px, 58px 58px, 68px 68px;
+    background-position: 8% 16%, 92% 20%, 50% 92%;
+  }
+}
+
+/* --- App Shell & Color Tokens --- */
+:root {
+  --brand: #0d6efd;
+  /* Bootstrap primary */
+  --brand-600: #0b5ed7;
+  --ink: #1f2937;
+  --muted: #6b7280;
+  --surface: #ffffff;
+  --surface-2: #f8f9fa;
+  --line: #e5e7eb;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #fff;
+  color: var(--ink);
+}
+
+/* Topbar polish */
+.navbar.brandbar {
+  background: linear-gradient(90deg, #0d1117, #111827);
+  border-bottom: 1px solid #0b1220;
+}
+
+.navbar.brandbar .navbar-brand {
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.navbar.brandbar .badge-role {
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .12);
+}
+
+/* --- Sidebar (desktop) --- */
+.sidebar {
+  width: 260px;
+  position: sticky;
+  top: 0;
+  height: calc(100vh - 0px);
+  /* already has topbar separate */
+  padding: 1rem .75rem;
+  background: var(--surface-2);
+  border-right: 1px solid var(--line);
+}
+
+.sidebar .sidebar-title {
+  font-size: .85rem;
+  letter-spacing: .4px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin: .25rem 1rem .5rem;
+}
+
+.sidebar .nav-link {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .55rem .85rem;
+  border-radius: .6rem;
+  color: #374151;
+  transition: all .15s ease;
+}
+
+.sidebar .nav-link .bi {
+  font-size: 1.05rem;
+  opacity: .9;
+}
+
+.sidebar .nav-link:hover {
+  background: #e9ecef;
+  color: #111827;
+  transform: translateX(1px);
+}
+
+.sidebar .nav-link.active {
+  background: rgba(13, 110, 253, .12);
+  color: #0b5ed7;
+  font-weight: 600;
+  border: 1px solid rgba(13, 110, 253, .2);
+}
+
+/* Fine line between sidebar and content */
+.layout-sep {
+  width: 1px;
+  background: var(--line);
+}
+
+/* --- Content area --- */
+.app-content {
+  padding: 1.25rem 1.25rem 2rem;
+  min-height: 100vh;
+  background: var(--surface);
+}
+
+/* Breadcrumb / page title block */
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: .25rem 0 1rem;
+}
+
+.page-head .title {
+  font-size: clamp(1.1rem, 1.2vw + .8rem, 1.6rem);
+  font-weight: 700;
+}
+
+/* --- Utilities --- */
+.rounded-2xl {
+  border-radius: 1rem;
+}
+
+.shadow-soft {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .06);
+}
+
+/* --- Offcanvas (mobile sidebar) --- */
+@media (max-width: 991.98px) {
+  .sidebar {
+    display: none;
+  }
+
+  .app-content {
+    padding: 1rem;
+  }
+}
+
+.offcanvas-nav .nav-link {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .6rem .75rem;
+  border-radius: .5rem;
+  color: #374151;
+}
+
+.offcanvas-nav .nav-link.active {
+  background: rgba(13, 110, 253, .12);
+  color: #0b5ed7;
+  font-weight: 600;
+}
+
+:root {
+  --brand: #2563eb;
+  /* สีน้ำเงินเดียวกับปุ่มหน้า login */
+  --brand-600: #1d4ed8;
+  --muted: #64748b;
+}
+
+body.auth-bg {
+  min-height: 100vh;
+  font-family: "Prompt", system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans Thai", sans-serif;
+  /* ไล่เฉดอ่อน + ลายจุด */
+  background:
+    radial-gradient(circle at 1px 1px, rgba(0, 0, 0, .20) 1px, transparent 1px) 0 0 / 20px 20px,
+    linear-gradient(180deg, #f7fafc, #f1f5f9 45%, #f8fafc 100%);
+}
+
+/* ไอคอนจางลอย ๆ */
+.bg-floating {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: .80;
+}
+
+.bg-floating .fi {
+  position: absolute;
+  font-size: 84px;
+  color: #9fb2ff;
+  opacity: .70;
+  filter: blur(.2px);
+}
+
+.bg-floating .fi.fi-1 {
+  left: 10%;
+  top: 60%;
+}
+
+.bg-floating .fi.fi-2 {
+  right: 15%;
+  top: 40%;
+  transform: rotate(-30deg);
+}
+
+.bg-floating .fi.fi-3 {
+  left: 30%;
+  bottom: 8%;
+  font-size: 96px;
+  opacity: .28;
+}
+
+/* การ์ดฟอร์ม */
+.auth-card {
+  border: 0;
+  border-radius: 20px;
+  box-shadow: 0 8px 28px rgba(2, 6, 23, .08);
+}
+
+.auth-card .card-header {
+  background: #fff;
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  padding-top: 28px;
+}
+
+.brand-title {
+  font-weight: 700;
+  font-size: 22px;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+}
+
+.brand-title .badge-soft {
+  background: rgba(37, 99, 235, .1);
+  color: var(--brand);
+  border: 1px solid rgba(37, 99, 235, .18);
+  padding: .4rem .6rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: .95rem;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.form-label {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.input-group-text {
+  background: #f8fafc;
+  border-color: #e5e7eb;
+  color: var(--muted);
+}
+
+.form-control,
+textarea.form-control,
+.form-select {
+  border-color: #e5e7eb;
+}
+
+.form-control:focus,
+.form-select:focus,
+textarea.form-control:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 .2rem rgba(37, 99, 235, .15);
+}
+
+.btn-brand {
+  background: var(--brand);
+  border-color: var(--brand);
+  font-weight: 600;
+}
+
+.btn-brand:hover {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+}
+
+.already {
+  color: #64748b;
+}
+
+.already a {
+  text-decoration: none;
+}
+
+.already a:hover {
+  text-decoration: underline;
 }

@@ -2,7 +2,7 @@
 // Database connection configuration
 $host = 'localhost';
 $user = 'root';
-$pass = '';
+$pass = '1234';
 $dbname = 'procurement_db';
 
 try {
