@@ -13,14 +13,29 @@ if (empty($_SESSION['role']) || $_SESSION['role'] !== 'PurchasingHead') {
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../db.php';
 
-/* ===== Actions ===== */
-// อนุมัติใบสั่งซื้อ
+
+if (!function_exists('fmt_thai_datetime_or_dash')) {
+  function fmt_thai_datetime_or_dash(?string $dt): string {
+    if (!$dt) return '-';
+    $dt = trim($dt);
+    if ($dt === '0000-00-00' || $dt === '0000-00-00 00:00:00') return '-';
+    $ts = strtotime($dt);
+    if ($ts === false) return '-';
+    $months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    $d   = (int)date('j', $ts);
+    $m   = (int)date('n', $ts);
+    $yBE = (int)date('Y', $ts) + 543;
+    $hm  = date('H:i', $ts);
+    return sprintf('%d %s %d %s น.', $d, $months[$m-1], $yBE, $hm);
+  }
+}
+const VAT_RATE = 0.07;
+
 if (isset($_GET['approve'])) {
   $orderId = (int)$_GET['approve'];
   $stmt = $pdo->prepare('UPDATE purchase_orders SET status = "Approved" WHERE id = ?');
   $stmt->execute([$orderId]);
 
-  // อัปเดตสต็อก
   $stmtQ = $pdo->prepare('SELECT quotation_id FROM purchase_orders WHERE id = ?');
   $stmtQ->execute([$orderId]);
   $quoteId = $stmtQ->fetchColumn();
@@ -36,7 +51,6 @@ if (isset($_GET['approve'])) {
   exit;
 }
 
-// ปฏิเสธใบสั่งซื้อ
 if (isset($_GET['reject'])) {
   $orderId = (int)$_GET['reject'];
   $stmt = $pdo->prepare('UPDATE purchase_orders SET status = "Rejected" WHERE id = ?');
@@ -45,7 +59,6 @@ if (isset($_GET['reject'])) {
   exit;
 }
 
-/* ===== Fetch Orders Pending ===== */
 $stmt = $pdo->query('
   SELECT po.*, q.purchase_request_id, s.company_name
   FROM purchase_orders po
@@ -94,7 +107,6 @@ $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
         </div>
 
-
         <!-- Main -->
         <main class="col-lg-10 app-content">
           <h2 class="mb-3">อนุมัติใบสั่งซื้อ</h2>
@@ -102,59 +114,78 @@ $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <div class="accordion" id="ordersAccordion">
             <?php foreach ($orders as $o): ?>
               <div class="accordion-item mb-2">
-                <h2 class="accordion-header" id="headingOrder<?= $o['id'] ?>">
+                <h2 class="accordion-header" id="headingOrder<?= (int)$o['id'] ?>">
                   <button class="accordion-button collapsed" type="button"
                     data-bs-toggle="collapse"
-                    data-bs-target="#collapseOrder<?= $o['id'] ?>"
+                    data-bs-target="#collapseOrder<?= (int)$o['id'] ?>"
                     aria-expanded="false"
-                    aria-controls="collapseOrder<?= $o['id'] ?>">
-                    ใบสั่งซื้อ #<?= $o['id'] ?> | ผู้ขาย: <?= htmlspecialchars($o['company_name']) ?> | วันที่ <?= htmlspecialchars($o['order_date']) ?>
+                    aria-controls="collapseOrder<?= (int)$o['id'] ?>">
+                    ใบสั่งซื้อ #<?= (int)$o['id'] ?> |
+                    ผู้ขาย: <?= htmlspecialchars($o['company_name'] ?? '', ENT_QUOTES, 'UTF-8') ?> |
+                    วันที่ <?= fmt_thai_datetime_or_dash($o['order_date'] ?? null) ?>
                   </button>
                 </h2>
-                <div id="collapseOrder<?= $o['id'] ?>" class="accordion-collapse collapse"
-                  aria-labelledby="headingOrder<?= $o['id'] ?>" data-bs-parent="#ordersAccordion">
+                <div id="collapseOrder<?= (int)$o['id'] ?>" class="accordion-collapse collapse"
+                  aria-labelledby="headingOrder<?= (int)$o['id'] ?>" data-bs-parent="#ordersAccordion">
                   <div class="accordion-body">
                     <?php
-                    $itemsStmt = $pdo->prepare('
-                    SELECT qi.quantity, qi.price, p.name
-                    FROM quotation_items qi
-                    JOIN products p ON qi.product_id = p.id
-                    WHERE qi.quotation_id = ?
-                  ');
-                    $itemsStmt->execute([$o['quotation_id']]);
-                    $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
+                      $itemsStmt = $pdo->prepare('
+                        SELECT qi.quantity, qi.price, p.name
+                        FROM quotation_items qi
+                        JOIN products p ON qi.product_id = p.id
+                        WHERE qi.quotation_id = ?
+                      ');
+                      $itemsStmt->execute([$o['quotation_id']]);
+                      $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                      $subtotal = 0.0;
                     ?>
                     <table class="table table-sm table-bordered mb-3">
                       <thead class="table-light">
                         <tr>
                           <th>สินค้า</th>
-                          <th>จำนวน</th>
-                          <th>ราคาต่อหน่วย</th>
-                          <th>ราคารวม</th>
+                          <th class="text-end" style="width:120px">จำนวน</th>
+                          <th class="text-end" style="width:140px">ราคาต่อหน่วย</th>
+                          <th class="text-end" style="width:160px">ราคารวม</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <?php $total = 0;
-                        foreach ($items as $it): ?>
-                          <?php $line = $it['quantity'] * $it['price'];
-                          $total += $line; ?>
+                        <?php foreach ($items as $it):
+                          $qty   = (float)($it['quantity'] ?? 0);
+                          $price = (float)($it['price'] ?? 0);
+                          $line  = $qty * $price;
+                          $subtotal += $line;
+                        ?>
                           <tr>
-                            <td><?= htmlspecialchars($it['name']) ?></td>
-                            <td><?= $it['quantity'] ?></td>
-                            <td><?= number_format($it['price'], 2) ?></td>
-                            <td><?= number_format($line, 2) ?></td>
+                            <td><?= htmlspecialchars($it['name'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                            <td class="text-end"><?= number_format($qty, 2) ?></td>
+                            <td class="text-end"><?= number_format($price, 2) ?></td>
+                            <td class="text-end"><?= number_format($line, 2) ?></td>
                           </tr>
                         <?php endforeach; ?>
+
+                        <?php
+                          $vat   = $subtotal * VAT_RATE;
+                          $grand = $subtotal + $vat;
+                        ?>
                         <tr>
                           <td colspan="3" class="text-end"><strong>รวม</strong></td>
-                          <td><strong><?= number_format($total, 2) ?></strong></td>
+                          <td class="text-end"><strong><?= number_format($subtotal, 2) ?></strong></td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="text-end">ภาษีมูลค่าเพิ่ม (<?= (int)(VAT_RATE * 100) ?>%)</td>
+                          <td class="text-end"><?= number_format($vat, 2) ?></td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="text-end"><strong>รวมทั้งสิ้น</strong></td>
+                          <td class="text-end"><strong><?= number_format($grand, 2) ?></strong></td>
                         </tr>
                       </tbody>
                     </table>
 
-                    <a href="?approve=<?= $o['id'] ?>" class="btn btn-success btn-sm"
+                    <a href="?approve=<?= (int)$o['id'] ?>" class="btn btn-success btn-sm"
                       onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อนี้?')">อนุมัติ</a>
-                    <a href="?reject=<?= $o['id'] ?>" class="btn btn-danger btn-sm"
+                    <a href="?reject=<?= (int)$o['id'] ?>" class="btn btn-danger btn-sm"
                       onclick="return confirm('ยืนยันการปฏิเสธใบสั่งซื้อนี้?')">ไม่อนุมัติ</a>
                   </div>
                 </div>
@@ -170,4 +201,4 @@ $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
     </div>
 
-    <?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php require_once __DIR__ . '/../includes/footer.php'; ?>

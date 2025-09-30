@@ -12,14 +12,29 @@ if (empty($_SESSION['role']) || !in_array($_SESSION['role'], ['DeptHead', 'Admin
 
 $uid = (int)($_SESSION['user_id'] ?? 0);
 
-/* ---------------- helpers ---------------- */
-function column_exists(PDO $pdo, string $table, string $col): bool
-{
+function column_exists(PDO $pdo, string $table, string $col): bool {
   $sql = "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1";
   $st = $pdo->prepare($sql);
   $st->execute([$table, $col]);
   return (bool)$st->fetchColumn();
+}
+
+function th_status(string $s): string {
+  $map = [
+    'Pending'            => 'รอดำเนินการ',
+    'ApprovedByDeptHead' => 'อนุมัติโดยหัวหน้าแผนก',
+    'RejectedByDeptHead' => 'ไม่อนุมัติโดยหัวหน้าแผนก',
+    'OpenForBid'         => 'เปิดประกาศให้เสนอราคา',
+    'Ordered'            => 'ออกใบสั่งซื้อแล้ว',
+
+    // สำรองสถานะทั่วไป
+    'Approved'           => 'อนุมัติ',
+    'PendingApproval'    => 'รออนุมัติ',
+    'Rejected'           => 'ไม่อนุมัติ',
+    'Cancelled'          => 'ยกเลิก',
+  ];
+  return $map[$s] ?? $s;
 }
 
 $priTable = 'purchase_request_items';
@@ -29,10 +44,8 @@ $qtyCol   = column_exists($pdo, $priTable, 'quantity') ? 'quantity'
   : (column_exists($pdo, $priTable, 'qty') ? 'qty' : null);
 
 if ($reqCol === null || $qtyCol === null) {
-
   die('purchase_request_items: ไม่พบคอลัมน์ request_id/purchase_request_id หรือ quantity/qty');
 }
-
 
 if (isset($_GET['approve'])) {
   $id = (int)$_GET['approve'];
@@ -56,7 +69,7 @@ if (isset($_GET['reject'])) {
                        SET status='RejectedByDeptHead', approved_by_head_at=NOW()
                        WHERE id=?")->execute([$id]);
   }
-  header('Location: /procurement_system/dept_head/approve_requests.php'); // ✅ absolute
+  header('Location: /procurement_system/dept_head/approve_requests.php');
   exit;
 }
 
@@ -94,7 +107,6 @@ $q = $pdo->prepare($sql);
 $q->execute([$deptId]);
 $requests = $q->fetchAll(PDO::FETCH_ASSOC);
 
-
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
@@ -114,7 +126,7 @@ require_once __DIR__ . '/../includes/header.php';
       </nav>
     </aside>
 
-    <!-- Offcanvas (mobile) – ใช้กับปุ่มแฮมเบอร์เกอร์ใน header -->
+    <!-- Offcanvas (mobile) -->
     <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSidebar" aria-labelledby="offcanvasSidebarLabel">
       <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="offcanvasSidebarLabel">
@@ -131,7 +143,6 @@ require_once __DIR__ . '/../includes/header.php';
         </a>
       </div>
     </div>
-
 
     <main class="col-lg-10 app-content">
       <h2 class="mb-3">อนุมัติใบขอซื้อสินค้า</h2>
@@ -162,15 +173,15 @@ require_once __DIR__ . '/../includes/header.php';
                     <div class="text-muted small">รวมจำนวน: <?= number_format((float)$r['total_qty'], 2) ?></div>
                   <?php endif; ?>
                 </td>
-                <td><?= htmlspecialchars($r['status'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                <td><?= htmlspecialchars(th_status($r['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                 <td><?= htmlspecialchars($r['created_at'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
                 <td>
                   <a class="btn btn-sm btn-success"
-                    href="?approve=<?= (int)$r['id'] ?>"
-                    onclick="return confirm('อนุมัติใบขอซื้อ #<?= (int)$r['id'] ?> ?')">อนุมัติ</a>
+                     href="?approve=<?= (int)$r['id'] ?>"
+                     onclick="return confirm('อนุมัติใบขอซื้อ #<?= (int)$r['id'] ?> ?')">อนุมัติ</a>
                   <a class="btn btn-sm btn-danger"
-                    href="?reject=<?= (int)$r['id'] ?>"
-                    onclick="return confirm('ไม่อนุมัติและลบใบขอซื้อ #<?= (int)$r['id'] ?> ?')">ไม่อนุมัติ</a>
+                     href="?reject=<?= (int)$r['id'] ?>"
+                     onclick="return confirm('ไม่อนุมัติและลบใบขอซื้อ #<?= (int)$r['id'] ?> ?')">ไม่อนุมัติ</a>
                 </td>
               </tr>
             <?php endforeach; ?>

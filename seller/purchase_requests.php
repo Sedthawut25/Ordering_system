@@ -1,4 +1,22 @@
 <?php
+
+function fmt_thai_datetime_or_dash(?string $dt): string
+{
+  if (!$dt) return '-';
+  $dt = trim($dt);
+  if ($dt === '0000-00-00' || $dt === '0000-00-00 00:00:00') return '-';
+
+  $ts = strtotime($dt);
+  if ($ts === false) return htmlspecialchars($dt, ENT_QUOTES, 'UTF-8'); // กันเคสแปลก
+
+  $months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  $d   = (int)date('j', $ts);
+  $m   = (int)date('n', $ts);  // 1-12
+  $yBE = (int)date('Y', $ts) + 543;
+  $hm  = date('H:i', $ts);
+  return sprintf('%d %s %d %s น.', $d, $months[$m - 1], $yBE, $hm);
+}
+
 require_once __DIR__ . '/../includes/header.php';
 check_role(['Seller']);
 require_once __DIR__ . '/../db.php';
@@ -9,7 +27,6 @@ if (!$seller_id || ($_SESSION['role'] ?? '') !== 'Seller') {
   exit;
 }
 
-// Fetch open requests
 $stmt = $pdo->prepare('
     SELECT pr.*, e.name AS employee_name
     FROM purchase_requests pr
@@ -20,11 +37,10 @@ $stmt = $pdo->prepare('
 $stmt->execute();
 $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
-
 <div class="container-fluid">
   <div class="row g-0">
 
-    <!-- Sidebar -->
+    
     <aside class="col-lg-2 d-none d-lg-block sidebar">
       <div class="sidebar-title">เมนูผู้ขาย</div>
       <nav class="nav flex-column">
@@ -43,7 +59,7 @@ $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </nav>
     </aside>
 
-    <!-- Offcanvas (mobile sidebar) -->
+    <!-- Offcanvas (mobile) -->
     <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSidebar" aria-labelledby="offcanvasSidebarLabel">
       <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="offcanvasSidebarLabel">
@@ -74,30 +90,36 @@ $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <div class="accordion" id="sellerRequestsAccordion">
         <?php foreach ($requests as $req): ?>
           <?php
-          // Check if this seller has already quoted
+        
+          $rawDate = $req['request_date'] ?? null;
+          if (!$rawDate || $rawDate === '0000-00-00' || $rawDate === '0000-00-00 00:00:00') {
+            $rawDate = $req['created_at'] ?? ($req['updated_at'] ?? null);
+          }
+          $displayDate = fmt_thai_datetime_or_dash($rawDate);
+
+      
           $check = $pdo->prepare('SELECT id FROM quotations WHERE purchase_request_id = ? AND seller_id = ?');
           $check->execute([$req['id'], $seller_id]);
           $hasQuote = $check->fetchColumn();
           ?>
           <div class="accordion-item mb-2">
-            <h2 class="accordion-header" id="heading<?= $req['id'] ?>">
+            <h2 class="accordion-header" id="heading<?= (int)$req['id'] ?>">
               <button class="accordion-button collapsed" type="button"
                 data-bs-toggle="collapse"
-                data-bs-target="#collapse<?= $req['id'] ?>"
+                data-bs-target="#collapse<?= (int)$req['id'] ?>"
                 aria-expanded="false"
-                aria-controls="collapse<?= $req['id'] ?>">
-                ใบขอซื้อ #<?= $req['id'] ?> |
-                พนักงาน: <?= htmlspecialchars($req['employee_name']) ?> |
-                วันที่ <?= htmlspecialchars($req['request_date']) ?>
+                aria-controls="collapse<?= (int)$req['id'] ?>">
+                ใบขอซื้อ #<?= (int)$req['id'] ?> |
+                พนักงาน: <?= htmlspecialchars($req['employee_name'] ?? '', ENT_QUOTES, 'UTF-8') ?> |
+                วันที่ <?= $displayDate ?>
               </button>
             </h2>
-            <div id="collapse<?= $req['id'] ?>"
+            <div id="collapse<?= (int)$req['id'] ?>"
               class="accordion-collapse collapse"
-              aria-labelledby="heading<?= $req['id'] ?>"
+              aria-labelledby="heading<?= (int)$req['id'] ?>"
               data-bs-parent="#sellerRequestsAccordion">
               <div class="accordion-body">
-                <p><strong>เหตุผล:</strong> <?= htmlspecialchars($req['reason']) ?></p>
-
+                <p><strong>เหตุผล:</strong> <?= htmlspecialchars($req['reason'] ?? '', ENT_QUOTES, 'UTF-8') ?></p>
                 <?php
                 $itemsStmt = $pdo->prepare('
                     SELECT pri.quantity, p.name
@@ -108,19 +130,18 @@ $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $itemsStmt->execute([$req['id']]);
                 $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
                 ?>
-
                 <table class="table table-sm table-bordered mb-3">
                   <thead class="table-light">
                     <tr>
                       <th>สินค้า</th>
-                      <th>จำนวน</th>
+                      <th style="width:140px" class="text-end">จำนวน</th>
                     </tr>
                   </thead>
                   <tbody>
                     <?php foreach ($items as $it): ?>
                       <tr>
-                        <td><?= htmlspecialchars($it['name']) ?></td>
-                        <td><?= $it['quantity'] ?></td>
+                        <td><?= htmlspecialchars($it['name'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                        <td class="text-end"><?= number_format((float)($it['quantity'] ?? 0), 2) ?></td>
                       </tr>
                     <?php endforeach; ?>
                   </tbody>
@@ -129,8 +150,10 @@ $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <?php if ($hasQuote): ?>
                   <span class="badge bg-secondary">ท่านได้เสนอราคาแล้ว</span>
                 <?php else: ?>
-                  <a href="/procurement_system/seller/quotations.php?create=<?= $req['id'] ?>"
-                    class="btn btn-primary">เสนอราคา</a>
+                  <a href="/procurement_system/seller/quotations.php?create=<?= (int)$req['id'] ?>"
+                    class="btn btn-primary">
+                    เสนอราคา
+                  </a>
                 <?php endif; ?>
               </div>
             </div>

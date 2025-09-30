@@ -1,18 +1,42 @@
 <?php
 // procurement_system/purchasing/open_requests.php
 
+/* ---------- Helpers: ฟอร์แมตวันที่ไทย + เช็คค่าวันที่ไม่ดี ---------- */
+if (!function_exists('fmt_thai_datetime_or_dash')) {
+  function fmt_thai_datetime_or_dash(?string $dt): string {
+    if (!$dt) return '-';
+    $dt = trim($dt);
+    if ($dt === '0000-00-00' || $dt === '0000-00-00 00:00:00') return '-';
+    $ts = strtotime($dt);
+    if ($ts === false) return '-';
+    $months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    $d   = (int)date('j', $ts);
+    $m   = (int)date('n', $ts);
+    $yBE = (int)date('Y', $ts) + 543;
+    $hms = date('H:i:s', $ts);
+    return sprintf('%d %s %d %s', $d, $months[$m-1], $yBE, $hms);
+  }
+}
+if (!function_exists('is_bad_date')) {
+  function is_bad_date(?string $s): bool {
+    if (!$s) return true;
+    $s = trim($s);
+    return $s === '0000-00-00' || $s === '0000-00-00 00:00:00';
+  }
+}
+
+/* ---------- Auth ก่อนมี output ---------- */
 if (session_status() === PHP_SESSION_NONE) {
   session_start();
 }
 require_once __DIR__ . '/../db.php';
 
-// ✅ ตรวจ role ก่อน output
 if (empty($_SESSION['role']) || $_SESSION['role'] !== 'Purchasing') {
   header('Location: /procurement_system/login.php');
   exit;
 }
 
-// ✅ เปิดประกาศ
+/* ---------- เปิดประกาศ ---------- */
 if (isset($_GET['open'])) {
   $reqId = (int)$_GET['open'];
   $stmt = $pdo->prepare('UPDATE purchase_requests SET status = "OpenForBid" WHERE id = ?');
@@ -21,16 +45,24 @@ if (isset($_GET['open'])) {
   exit;
 }
 
-// ✅ โหลดใบขอซื้อที่อนุมัติแล้ว แต่ยังไม่เปิดประกาศ
-$sql = 'SELECT pr.*, e.name AS employee_name
-        FROM purchase_requests pr
-        JOIN employees e ON e.id = pr.employee_id
-        WHERE pr.status = "ApprovedByDeptHead"
-        ORDER BY pr.id DESC';
+/* ---------- โหลดใบขอซื้อที่อนุมัติแล้ว
+      วันที่จะแสดง: created_at > request_date > first_quote_date ---------- */
+$sql = '
+  SELECT
+    pr.*,
+    e.name AS employee_name,
+    MIN(q.quote_date) AS first_quote_date
+  FROM purchase_requests pr
+  JOIN employees e ON e.id = pr.employee_id
+  LEFT JOIN quotations q ON q.purchase_request_id = pr.id
+  WHERE pr.status = "ApprovedByDeptHead"
+  GROUP BY pr.id
+  ORDER BY pr.id DESC
+';
 $stmt = $pdo->query($sql);
 $requests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ✅ include header ตอนนี้ค่อยเรียก (มี Topbar ด้วย)
+/* ---------- include header ---------- */
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
@@ -92,13 +124,22 @@ require_once __DIR__ . '/../includes/header.php';
       </div>
     </div>
 
-
     <!-- Main -->
     <main class="col-lg-10 app-content">
       <h2 class="mb-3">ใบขอซื้อที่รอเปิดประกาศ</h2>
 
       <div class="accordion" id="requestsList">
         <?php foreach ($requests as $req): ?>
+          <?php
+            // ใช้วันที่จาก "จัดการขอซื้อ" (created_at) ก่อน
+            // หากว่าง/ไม่ดี → ใช้ request_date → หากยังว่าง → ใช้วันที่ใบเสนอราคาแรก
+            $raw = !is_bad_date($req['created_at'] ?? null) ? $req['created_at']
+                 : (!is_bad_date($req['request_date'] ?? null) ? $req['request_date']
+                 : ($req['first_quote_date'] ?? null));
+
+            $displayDate = fmt_thai_datetime_or_dash($raw);
+            if ($displayDate === '-') $displayDate = 'ยังไม่ระบุ';
+          ?>
           <div class="accordion-item mb-2">
             <h2 class="accordion-header" id="heading<?= (int)$req['id'] ?>">
               <button class="accordion-button collapsed" type="button"
@@ -106,7 +147,7 @@ require_once __DIR__ . '/../includes/header.php';
                 data-bs-target="#collapse<?= (int)$req['id'] ?>">
                 ใบขอซื้อ #<?= (int)$req['id'] ?> |
                 พนักงาน: <?= htmlspecialchars($req['employee_name'], ENT_QUOTES, 'UTF-8') ?> |
-                วันที่ <?= htmlspecialchars($req['request_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                วันที่ <?= $displayDate ?>
               </button>
             </h2>
 
@@ -116,15 +157,15 @@ require_once __DIR__ . '/../includes/header.php';
                 <p><strong>เหตุผล:</strong> <?= htmlspecialchars($req['reason'] ?? '', ENT_QUOTES, 'UTF-8') ?></p>
 
                 <?php
-                $itemsStmt = $pdo->prepare('
-                  SELECT pri.quantity, p.name
-                  FROM purchase_request_items pri
-                  JOIN products p ON p.id = pri.product_id
-                  WHERE pri.purchase_request_id = ?
-                  ORDER BY p.name
-                ');
-                $itemsStmt->execute([(int)$req['id']]);
-                $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
+                  $itemsStmt = $pdo->prepare('
+                    SELECT pri.quantity, p.name
+                    FROM purchase_request_items pri
+                    JOIN products p ON p.id = pri.product_id
+                    WHERE pri.purchase_request_id = ?
+                    ORDER BY p.name
+                  ');
+                  $itemsStmt->execute([(int)$req['id']]);
+                  $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
                 ?>
 
                 <div class="table-responsive mb-3">

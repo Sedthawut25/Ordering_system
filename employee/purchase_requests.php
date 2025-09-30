@@ -1,9 +1,4 @@
 <?php
-// procurement_system/employee/purchase_requests.php
-
-/* ================= Bootstrap (ห้ามมี output ก่อน redirect/header) ================= */
-// ❗ เดิมไฟล์ include header.php ก่อน check_role → ถ้า role ไม่ตรง จะ redirect หลังมี output แล้วพัง
-// ✅ แก้: ตรวจสิทธิ์ก่อน
 if (session_status() === PHP_SESSION_NONE) {
   session_start();
 }
@@ -16,16 +11,13 @@ if (empty($_SESSION['role']) || $_SESSION['role'] !== 'Employee') {
 
 $employeeId = (int)($_SESSION['user_id'] ?? 0);
 if ($employeeId <= 0) {
-  // กันเคสไม่มี user_id ใน session
   header('Location: /procurement_system/login.php');
   exit;
 }
 
 $message = '';
 
-/* ================= Helpers ================= */
-function column_exists(PDO $pdo, string $table, string $col): bool
-{
+function column_exists(PDO $pdo, string $table, string $col): bool {
   $sql = "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1";
   $st = $pdo->prepare($sql);
@@ -33,7 +25,22 @@ function column_exists(PDO $pdo, string $table, string $col): bool
   return (bool)$st->fetchColumn();
 }
 
-/* ================= dropdown products ================= */
+function th_status(string $s): string {
+  $map = [
+    // สถานะของ PR
+    'Pending'             => 'รอดำเนินการ',
+    'ApprovedByDeptHead'  => 'อนุมัติโดยหัวหน้าแผนก',
+    'RejectedByDeptHead'  => 'ไม่อนุมัติโดยหัวหน้าแผนก',
+    'OpenForBid'          => 'เปิดประกาศให้เสนอราคา',
+    'Ordered'             => 'ออกใบสั่งซื้อแล้ว',
+
+    'Approved'            => 'อนุมัติ',
+    'PendingApproval'     => 'รออนุมัติ',
+    'Rejected'            => 'ไม่อนุมัติ',
+    'Cancelled'           => 'ยกเลิก',
+  ];
+  return $map[$s] ?? $s; 
+}
 $products = $pdo->query('SELECT id, name FROM products ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
 
 /* ================= create request + items ================= */
@@ -45,7 +52,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_request'])) {
   if ($reason === '') {
     $message = 'กรุณาระบุเหตุผลการขอซื้อ';
   } else {
-    // เก็บเฉพาะแถวที่ valid
     $lines = [];
     $n = max(count($pids), count($qtys));
     for ($i = 0; $i < $n; $i++) {
@@ -57,15 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_request'])) {
     if (empty($lines)) {
       $message = 'กรุณาเลือกสินค้าและจำนวนอย่างน้อย 1 รายการ';
     } else {
-      // ตรวจชื่อคอลัมน์จริงของ items
       $priTable = 'purchase_request_items';
       $reqCol   = column_exists($pdo, $priTable, 'request_id') ? 'request_id'
         : (column_exists($pdo, $priTable, 'purchase_request_id') ? 'purchase_request_id' : null);
       $qtyCol   = column_exists($pdo, $priTable, 'quantity') ? 'quantity'
         : (column_exists($pdo, $priTable, 'qty') ? 'qty' : null);
       if ($reqCol === null || $qtyCol === null) {
-        // ❗ เดิม die กลางหน้าอาจทำให้ DOM พัง
-        // ✅ ถ้าจะหยุดก็หยุดก่อน output (ที่นี่เรายังไม่ include header.php จึงโอเค)
         die('purchase_request_items: ไม่พบคอลัมน์ request_id/purchase_request_id หรือ quantity/qty');
       }
 
@@ -74,17 +77,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_request'])) {
 
         // head
         $stmt = $pdo->prepare('
-                    INSERT INTO purchase_requests (employee_id, reason, status, created_at)
-                    VALUES (?, ?, "Pending", NOW())
-                ');
+          INSERT INTO purchase_requests (employee_id, reason, status, created_at)
+          VALUES (?, ?, "Pending", NOW())
+        ');
         $stmt->execute([$employeeId, $reason]);
         $reqId = (int)$pdo->lastInsertId();
 
         // items
         $insItem = $pdo->prepare("
-                    INSERT INTO {$priTable} (`{$reqCol}`, product_id, `{$qtyCol}`)
-                    VALUES (?, ?, ?)
-                ");
+          INSERT INTO {$priTable} (`{$reqCol}`, product_id, `{$qtyCol}`)
+          VALUES (?, ?, ?)
+        ");
         foreach ($lines as [$pid, $q]) {
           $insItem->execute([$reqId, $pid, $q]);
         }
@@ -99,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_request'])) {
   }
 }
 
-/* ================= load my requests (ซ่อนใบที่ถูก reject) ================= */
+
 $sql = 'SELECT id, reason, status, created_at
         FROM purchase_requests
         WHERE employee_id = ? AND status <> "RejectedByDeptHead"
@@ -108,7 +111,6 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute([$employeeId]);
 $myRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-/* ================= preload รายการสินค้า เพื่อใช้ในปุ่ม "ดูรายละเอียด" ================= */
 $itemsByReq = [];
 if (!empty($myRequests)) {
   $priTable = 'purchase_request_items';
@@ -125,13 +127,13 @@ if (!empty($myRequests)) {
   if (!empty($ids)) {
     $ph = implode(',', array_fill(0, count($ids), '?'));
     $sqlItems = "
-            SELECT pri.`$reqCol` AS request_id, pri.product_id, pri.`$qtyCol` AS quantity,
-                   p.name AS product_name
-            FROM {$priTable} pri
-            JOIN products p ON p.id = pri.product_id
-            WHERE pri.`$reqCol` IN ($ph)
-            ORDER BY p.name
-        ";
+      SELECT pri.`$reqCol` AS request_id, pri.product_id, pri.`$qtyCol` AS quantity,
+             p.name AS product_name
+      FROM {$priTable} pri
+      JOIN products p ON p.id = pri.product_id
+      WHERE pri.`$reqCol` IN ($ph)
+      ORDER BY p.name
+    ";
     $stI = $pdo->prepare($sqlItems);
     $stI->execute($ids);
     while ($row = $stI->fetch(PDO::FETCH_ASSOC)) {
@@ -141,8 +143,6 @@ if (!empty($myRequests)) {
   }
 }
 
-/* ================= ตอนนี้ค่อย include header (Topbar) ================= */
-// ✅ จากนี้ไปคือส่วนแสดงผล
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
@@ -150,8 +150,6 @@ require_once __DIR__ . '/../includes/header.php';
   <div class="row g-0">
 
     <!-- Sidebar (desktop) -->
-    <!-- ❗ เดิมใช้ col-md-2 / main col-md-10 → layout เพี้ยนเมื่อคู่กับหน้าอื่นที่ใช้ col-lg
-         ✅ ให้ใช้ col-lg-2 + col-lg-10 เหมือนทุกหน้า -->
     <aside class="col-lg-2 d-none d-lg-block sidebar">
       <div class="sidebar-title">เมนูพนักงาน</div>
       <nav class="nav flex-column">
@@ -167,7 +165,7 @@ require_once __DIR__ . '/../includes/header.php';
       </nav>
     </aside>
 
-    <!-- Offcanvas (mobile) – ใช้กับปุ่มแฮมเบอร์เกอร์ใน header -->
+    <!-- Offcanvas (mobile) -->
     <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasSidebar" aria-labelledby="offcanvasSidebarLabel">
       <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="offcanvasSidebarLabel">
@@ -187,7 +185,6 @@ require_once __DIR__ . '/../includes/header.php';
         </a>
       </div>
     </div>
-
 
     <!-- Main -->
     <main class="col-lg-10 app-content">
@@ -254,14 +251,14 @@ require_once __DIR__ . '/../includes/header.php';
               <tr>
                 <td><?= (int)$r['id'] ?></td>
                 <td><?= htmlspecialchars($r['reason'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                <td><?= htmlspecialchars($r['status'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                <td><?= htmlspecialchars(th_status($r['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                 <td><?= htmlspecialchars($r['created_at'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
                 <td>
                   <button type="button"
-                    class="btn btn-sm btn-outline-primary"
-                    data-bs-toggle="modal"
-                    data-bs-target="#prDetailModal"
-                    data-req="<?= (int)$r['id'] ?>">
+                          class="btn btn-sm btn-outline-primary"
+                          data-bs-toggle="modal"
+                          data-bs-target="#prDetailModal"
+                          data-req="<?= (int)$r['id'] ?>">
                     ดูรายละเอียด
                   </button>
                 </td>
@@ -276,7 +273,7 @@ require_once __DIR__ . '/../includes/header.php';
         </table>
       </div>
 
-      <!-- Modal รายละเอียด (ใช้ตัวเดียว เติมข้อมูลตอนเปิด) -->
+      <!-- Modal รายละเอียด -->
       <div class="modal fade" id="prDetailModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content">
@@ -306,17 +303,12 @@ require_once __DIR__ . '/../includes/header.php';
       </div>
 
       <script>
-        // แปลงข้อมูลรายการสินค้าที่ preload จาก PHP ไปเป็น JS object
         const PR_ITEMS = <?= json_encode($itemsByReq ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 
         function escapeHtml(s) {
           return String(s).replace(/[&<>"']/g, m => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-          } [m]));
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+          }[m]));
         }
 
         const prModal = document.getElementById('prDetailModal');
@@ -346,7 +338,6 @@ require_once __DIR__ . '/../includes/header.php';
           body.innerHTML = html;
         });
 
-        // จัดการบรรทัดสินค้าในฟอร์ม
         function addLine() {
           const wrap = document.getElementById('lineItems');
           const first = wrap.querySelector('.pr-line');

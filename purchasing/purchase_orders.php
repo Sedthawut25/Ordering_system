@@ -1,7 +1,4 @@
 <?php
-// procurement_system/purchasing/purchase_orders.php
-
-/* ====== ห้ามมี output ก่อน redirect/header ====== */
 if (session_status() === PHP_SESSION_NONE) {
   session_start();
 }
@@ -12,7 +9,20 @@ if (empty($_SESSION['role']) || $_SESSION['role'] !== 'Purchasing') {
   exit;
 }
 
-/* ====== Data: โหลด PO พร้อมรายละเอียด ====== */
+function th_status(string $s): string {
+  $map = [
+    'Approved'         => 'อนุมัติ',
+    'PendingApproval'  => 'รออนุมัติ',
+    'Rejected'         => 'ไม่อนุมัติ',
+    'Ordered'          => 'ออกใบสั่งซื้อแล้ว',
+    'Pending'          => 'รอดำเนินการ',
+    'Selected'         => 'ได้รับเลือก',
+    'Cancelled'        => 'ยกเลิก',
+  ];
+  return $map[$s] ?? $s; 
+}
+
+
 $sql = '
   SELECT
     po.*,
@@ -88,7 +98,6 @@ require_once __DIR__ . '/../includes/header.php';
       </div>
     </div>
 
-
     <!-- Main -->
     <main class="col-lg-10 app-content">
       <h2 class="mb-3">ใบสั่งซื้อ</h2>
@@ -102,6 +111,7 @@ require_once __DIR__ . '/../includes/header.php';
               <th>ผู้ขาย</th>
               <th class="text-end" style="width:180px">วันที่สั่งซื้อ</th>
               <th style="width:160px">สถานะ</th>
+              <th style="width:160px">จัดการ</th>
             </tr>
           </thead>
           <tbody>
@@ -111,13 +121,21 @@ require_once __DIR__ . '/../includes/header.php';
                 <td><?= (int)$o['purchase_request_id'] ?></td>
                 <td><?= htmlspecialchars($o['company_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
                 <td class="text-end"><?= htmlspecialchars($o['order_date'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                <td><?= htmlspecialchars($o['status'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                <td><?= htmlspecialchars(th_status($o['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                <td>
+                  <a
+                    class="btn btn-sm btn-outline-danger"
+                    href="/procurement_system/purchasing/po_pdf.php?id=<?= (int)$o['id'] ?>"
+                    target="_blank" rel="noopener">
+                    <i class="bi bi-filetype-pdf me-1"></i> Export PDF
+                  </a>
+                </td>
               </tr>
             <?php endforeach; ?>
 
             <?php if (empty($orders)): ?>
               <tr>
-                <td colspan="5" class="text-center text-muted">ยังไม่มีใบสั่งซื้อ</td>
+                <td colspan="6" class="text-center text-muted">ยังไม่มีใบสั่งซื้อ</td>
               </tr>
             <?php endif; ?>
           </tbody>
